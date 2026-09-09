@@ -1,0 +1,52 @@
+# Dependinte
+node_modules/
+.pnp/
+.pnp.js
+
+# Build
+dist/
+build/
+.vite/
+*.tsbuildinfo
+
+# Mediu si secrete - NU se comite niciodata
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+
+# Asset-uri sursa mari (pack-uri descarcate, PSD, Aseprite)
+# Se pastreaza doar exportul folosit in joc; evidenta licentelor e in assets/README.md
+assets/raw/**
+!assets/raw/.gitkeep
+*.aseprite
+*.psd
+*.xcf
+
+# Unelte si sistem
+.DS_Store
+Thumbs.db
+desktop.ini
+*.log
+npm-debug.log*
+coverage/
+.cache/
+
+# Editoare
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+
+# Scratch local
+scratch/
+tmp/
+
+# Documente interne de lucru - raman local, nu in repo-ul public
+intent.md
+spec.md
+plan.md
+TASKS.md
+CLAUDE.md
+docs/
