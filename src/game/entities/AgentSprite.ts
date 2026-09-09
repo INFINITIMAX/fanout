@@ -1,10 +1,15 @@
-// Reprezentarea vizuala a unui agent: un dreptunghi cu numele lui, skill-ul
-// dominant si nivelul (sub nume), si starea curenta (culoare + text).
-// Starea trebuie citibila fara click (spec.md 2.6).
+// Reprezentarea vizuala a unui agent: un card rotunjit cu numele lui, nivelul
+// (suma nivelurilor de skill), o bara stil HP spre urmatorul punct de skill,
+// o insigna cu skill-ul dominant si un punct auriu cand are puncte necheltuite.
+// Starea trebuie citibila fara click (spec.md 2.6) - de-aia fundalul cardului
+// ramane colorat dupa cele patru stari reale (T-38).
 
 import * as Phaser from 'phaser';
-import type { Agent, SkillId } from '../../sim';
-import { COLORS, FONT, LAYOUT, SKILL_LABELS, dominantSkill } from '../layout';
+import type { Agent } from '../../sim';
+import { totalSkillLevels } from '../../sim';
+import { BALANCE } from '../../data/balance';
+import { COLORS, LAYOUT, FONT, RADIUS, SKILL_BADGES, dominantSkill } from '../layout';
+import { paintBar, paintPanel, textStyle } from '../render';
 
 /**
  * Patru stari, derivate din starea reala (nu din activitatea ultimului tick):
@@ -14,16 +19,9 @@ import { COLORS, FONT, LAYOUT, SKILL_LABELS, dominantSkill } from '../layout';
  */
 export type AgentVisualStatus = 'idle' | 'assigned' | 'working' | 'blocked';
 
-const STATUS_LABEL: Record<AgentVisualStatus, string> = {
-  idle: 'idle',
-  assigned: 'assigned',
-  working: 'working',
-  blocked: 'blocked',
-};
-
 const STATUS_COLOR: Record<AgentVisualStatus, number> = {
   idle: COLORS.AGENT_IDLE,
-  assigned: COLORS.AGENT_ALLOCATED,
+  assigned: COLORS.AGENT_ASSIGNED,
   working: COLORS.AGENT_WORKING,
   blocked: COLORS.AGENT_BLOCKED,
 };
@@ -31,74 +29,138 @@ const STATUS_COLOR: Record<AgentVisualStatus, number> = {
 export class AgentSprite extends Phaser.GameObjects.Container {
   readonly agentId: string;
 
-  private readonly box: Phaser.GameObjects.Rectangle;
+  private readonly panel: Phaser.GameObjects.Graphics;
   private readonly nameText: Phaser.GameObjects.Text;
-  private readonly skillText: Phaser.GameObjects.Text;
-  private readonly statusText: Phaser.GameObjects.Text;
+  private readonly levelText: Phaser.GameObjects.Text;
+  private readonly bar: Phaser.GameObjects.Graphics;
+  private readonly barLabel: Phaser.GameObjects.Text;
+  private readonly badgeBg: Phaser.GameObjects.Graphics;
+  private readonly badgeText: Phaser.GameObjects.Text;
+  private readonly skillPointDot: Phaser.GameObjects.Arc;
+
+  private readonly barWidth: number;
+  private readonly barX: number;
+  private readonly barY: number;
+
+  private status: AgentVisualStatus = 'idle';
 
   constructor(scene: Phaser.Scene, agent: Agent, x: number, y: number) {
     super(scene, x, y);
     this.agentId = agent.id;
 
-    const { skill, level } = dominantSkill(agent);
+    const halfWidth = LAYOUT.AGENT_WIDTH / 2;
     const halfHeight = LAYOUT.AGENT_HEIGHT / 2;
+    const padding = 10;
 
-    this.box = scene.add
-      .rectangle(0, 0, LAYOUT.AGENT_WIDTH, LAYOUT.AGENT_HEIGHT, COLORS.AGENT_IDLE)
-      .setStrokeStyle(2, COLORS.AGENT_STROKE, 0.2);
+    this.panel = scene.add.graphics();
+    this.panel.setPosition(-halfWidth, -halfHeight);
+    paintPanel(this.panel, LAYOUT.AGENT_WIDTH, LAYOUT.AGENT_HEIGHT, {
+      radius: RADIUS.CARD,
+      bgColor: STATUS_COLOR.idle,
+      bgAlpha: COLORS.PANEL_BG_ALPHA,
+    });
+
     this.nameText = scene.add
-      .text(0, -halfHeight + 10, agent.name, {
-        fontFamily: FONT.FAMILY,
-        fontSize: `${FONT.SIZE_PRIMARY}px`,
-        color: COLORS.TEXT_PRIMARY,
-        fontStyle: 'bold',
-      })
-      .setOrigin(0.5);
-    this.skillText = scene.add
-      .text(0, 0, `${SKILL_LABELS[skill]} ${level}`, {
-        fontFamily: FONT.FAMILY,
-        fontSize: `${FONT.SIZE_SECONDARY}px`,
-        color: COLORS.TEXT_MUTED,
-      })
-      .setOrigin(0.5);
-    this.statusText = scene.add
-      .text(0, halfHeight - 11, STATUS_LABEL.idle, {
-        fontFamily: FONT.FAMILY,
-        fontSize: `${FONT.SIZE_SECONDARY}px`,
-        color: COLORS.TEXT_MUTED,
-      })
+      .text(-halfWidth + padding, -halfHeight + 14, agent.name, textStyle(FONT.BODY, COLORS.TEXT))
+      .setOrigin(0, 0.5);
+
+    this.levelText = scene.add
+      .text(halfWidth - padding - LAYOUT.AGENT_BADGE_SIZE - 8, -halfHeight + 14, '', textStyle(FONT.SMALL, COLORS.TEXT_DIM))
+      .setOrigin(1, 0.5);
+
+    this.barWidth = LAYOUT.AGENT_WIDTH - padding * 2 - LAYOUT.AGENT_BADGE_SIZE - 8;
+    this.barX = -halfWidth + padding;
+    this.barY = 6;
+
+    this.bar = scene.add.graphics();
+    this.bar.setPosition(this.barX, this.barY);
+    paintBar(this.bar, this.barWidth, LAYOUT.AGENT_BAR_HEIGHT, 0, COLORS.SELECTION);
+
+    this.barLabel = scene.add
+      .text(this.barX + this.barWidth / 2, this.barY + LAYOUT.AGENT_BAR_HEIGHT / 2, '', textStyle(FONT.NUMERIC, COLORS.TEXT))
       .setOrigin(0.5);
 
-    this.add([this.box, this.nameText, this.skillText, this.statusText]);
+    const badgeCx = halfWidth - padding - LAYOUT.AGENT_BADGE_SIZE / 2;
+    const badgeCy = this.barY + LAYOUT.AGENT_BAR_HEIGHT / 2;
+    this.badgeBg = scene.add.graphics();
+    this.badgeBg.setPosition(badgeCx - LAYOUT.AGENT_BADGE_SIZE / 2, badgeCy - LAYOUT.AGENT_BADGE_SIZE / 2);
+    paintPanel(this.badgeBg, LAYOUT.AGENT_BADGE_SIZE, LAYOUT.AGENT_BADGE_SIZE, {
+      radius: LAYOUT.AGENT_BADGE_SIZE / 2,
+      bgColor: COLORS.BACKGROUND,
+      bgAlpha: COLORS.PANEL_BG_ALPHA,
+      shadow: false,
+    });
+    this.badgeText = scene.add
+      .text(badgeCx, badgeCy, '', { ...textStyle(FONT.SMALL, COLORS.TEXT_DIM), fontSize: '10px' })
+      .setOrigin(0.5);
+
+    this.skillPointDot = scene.add
+      .circle(-halfWidth + LAYOUT.AGENT_DOT_RADIUS + 4, -halfHeight + LAYOUT.AGENT_DOT_RADIUS + 4, LAYOUT.AGENT_DOT_RADIUS, COLORS.SELECTION)
+      .setVisible(false);
+
+    this.add([
+      this.panel,
+      this.nameText,
+      this.levelText,
+      this.bar,
+      this.barLabel,
+      this.badgeBg,
+      this.badgeText,
+      this.skillPointDot,
+    ]);
     this.setSize(LAYOUT.AGENT_WIDTH, LAYOUT.AGENT_HEIGHT);
     this.setInteractive({ draggable: true, useHandCursor: true });
 
     scene.add.existing(this);
+    this.update(agent, 'idle');
   }
 
-  /** Actualizeaza culoarea si eticheta de stare. `detail` e skill-ul task-ului, cand e alocat. */
-  setStatus(status: AgentVisualStatus, detail?: SkillId): void {
-    this.box.setFillStyle(STATUS_COLOR[status]);
-    this.statusText.setText(
-      detail ? `${STATUS_LABEL[status]} · ${SKILL_LABELS[detail]}` : STATUS_LABEL[status],
-    );
+  /** Recalculeaza tot continutul cardului din starea curenta a agentului. */
+  override update(agent: Agent, status: AgentVisualStatus): void {
+    this.status = status;
+    paintPanel(this.panel, LAYOUT.AGENT_WIDTH, LAYOUT.AGENT_HEIGHT, {
+      radius: RADIUS.CARD,
+      bgColor: STATUS_COLOR[status],
+      bgAlpha: COLORS.PANEL_BG_ALPHA,
+    });
+
+    this.levelText.setText(`Lv. ${totalSkillLevels(agent)}`);
+
+    const hoursIntoLevel = agent.hoursWorked % BALANCE.HOURS_PER_SKILL_POINT;
+    const ratio = hoursIntoLevel / BALANCE.HOURS_PER_SKILL_POINT;
+    paintBar(this.bar, this.barWidth, LAYOUT.AGENT_BAR_HEIGHT, ratio, COLORS.SELECTION);
+    this.barLabel.setText(`${Math.floor(hoursIntoLevel)} / ${BALANCE.HOURS_PER_SKILL_POINT} h`);
+
+    const { skill } = dominantSkill(agent);
+    this.badgeText.setText(SKILL_BADGES[skill]);
+
+    this.skillPointDot.setVisible(agent.unspentSkillPoints > 0);
   }
 
-  /** Contur rosu in timpul unui drag, peste un sub-task incompatibil. */
+  /** Contur de avertizare in timpul unui drag, peste un sub-task incompatibil. */
   setDragHighlight(blocked: boolean): void {
-    this.box.setStrokeStyle(
-      blocked ? 3 : 2,
-      blocked ? COLORS.TASK_REFUSED_FLASH : COLORS.AGENT_STROKE,
-      blocked ? 1 : 0.2,
-    );
+    paintPanel(this.panel, LAYOUT.AGENT_WIDTH, LAYOUT.AGENT_HEIGHT, {
+      radius: RADIUS.CARD,
+      bgColor: STATUS_COLOR[this.status],
+      bgAlpha: COLORS.PANEL_BG_ALPHA,
+      borderColor: blocked ? COLORS.REFUSAL : COLORS.PANEL_BORDER,
+      borderAlpha: blocked ? 1 : COLORS.PANEL_BORDER_ALPHA,
+    });
   }
 
   /** Clipire rosie scurta - feedback ca alocarea a fost refuzata. */
   flashRefusal(): void {
-    const original = this.box.fillColor;
-    this.box.setFillStyle(COLORS.AGENT_BLOCKED);
+    paintPanel(this.panel, LAYOUT.AGENT_WIDTH, LAYOUT.AGENT_HEIGHT, {
+      radius: RADIUS.CARD,
+      bgColor: COLORS.REFUSAL,
+      bgAlpha: COLORS.PANEL_BG_ALPHA,
+    });
     this.scene.time.delayedCall(LAYOUT.FLASH_DURATION_MS, () => {
-      this.box.setFillStyle(original);
+      paintPanel(this.panel, LAYOUT.AGENT_WIDTH, LAYOUT.AGENT_HEIGHT, {
+        radius: RADIUS.CARD,
+        bgColor: STATUS_COLOR[this.status],
+        bgAlpha: COLORS.PANEL_BG_ALPHA,
+      });
     });
   }
 }

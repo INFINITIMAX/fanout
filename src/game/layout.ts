@@ -12,49 +12,79 @@ import { SKILL_IDS } from '../sim';
 export const CANVAS_PARENT_ID = 'fabricaai-canvas';
 
 /**
+ * Un singur nivel de tipografie: marime, grosime (folosita ca `fontStyle` in
+ * Phaser, care accepta un numar de weight in locul cuvantului "bold"), si
+ * spatiere optionala intre litere, pentru titlurile de panou.
+ */
+interface FontVariant {
+  readonly SIZE: number;
+  readonly WEIGHT: string;
+  readonly LETTER_SPACING?: number;
+}
+
+/**
  * Stack unic de fonturi, folosit atat de textele Phaser (src/game/) cat si de
  * HUD-ul DOM (src/ui/hud.ts). hud.ts nu poate importa din acest fisier (regula
  * de separare game/ vs ui/ din CLAUDE.md), asa ca acolo stack-ul e duplicat literal
  * - valoarea trebuie tinuta identica manual daca se schimba aici.
  */
 export const FONT = {
-  FAMILY: `'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif`,
-  SIZE_SECONDARY: 13,
-  SIZE_PRIMARY: 15,
-  SIZE_TITLE: 18,
+  FAMILY: `'M PLUS Rounded 1c', system-ui, sans-serif`,
+  /** Titluri de panou: AGENTS, OFFERS, BANKRUPT - majuscule, aplicate la locul de folosire. */
+  TITLE: { SIZE: 18, WEIGHT: '800', LETTER_SPACING: 1.5 } satisfies FontVariant,
+  BODY: { SIZE: 15, WEIGHT: '700' } satisfies FontVariant,
+  SMALL: { SIZE: 13, WEIGHT: '700' } satisfies FontVariant,
+  /** Niveluri, bani, procente, ore - orice cifra care trebuie sa iasa in evidenta. */
+  NUMERIC: { SIZE: 14, WEIGHT: '800' } satisfies FontVariant,
+} as const;
+
+export const RADIUS = {
+  PANEL: 14,
+  CARD: 12,
+  PILL: 999,
+} as const;
+
+/** Deplasarea umbrei difuze de sub panouri (vezi src/game/render.ts). */
+export const SHADOW = {
+  OFFSET_X: 0,
+  OFFSET_Y: 3,
 } as const;
 
 export const LAYOUT = {
   SCENE_WIDTH: 900,
   SCENE_HEIGHT: 640,
 
-  // Zona de birouri: agentii liberi stau aici, intr-un grid de 2 coloane.
+  // Panoul AGENTS: lista verticala de carduri, o singura coloana.
   OFFICE_X: 20,
   OFFICE_Y: 20,
-  OFFICE_WIDTH: 210,
+  OFFICE_WIDTH: 200,
   OFFICE_HEIGHT: 600,
-  OFFICE_TITLE_HEIGHT: 28,
-  OFFICE_COLUMNS: 2,
-  OFFICE_ROW_HEIGHT: 76,
+  OFFICE_TITLE_HEIGHT: 34,
+  OFFICE_COLUMNS: 1,
+  OFFICE_ROW_HEIGHT: 80,
   OFFICE_PADDING: 10,
 
   // Zona contractelor active: cate un ContractCard stivuit vertical.
-  CONTRACTS_X: 250,
+  CONTRACTS_X: 240,
   CONTRACTS_Y: 20,
   CONTRACT_CARD_GAP: 16,
   CONTRACT_CARD_WIDTH: 630,
-  CONTRACT_HEADER_HEIGHT: 40,
-  CONTRACT_CARD_PADDING: 12,
+  CONTRACT_HEADER_HEIGHT: 44,
+  CONTRACT_CARD_PADDING: 14,
 
-  TASK_ROW_HEIGHT: 38,
-  TASK_ROW_GAP: 6,
-  TASK_BAR_WIDTH: 380,
-  TASK_BAR_HEIGHT: 14,
+  TASK_ROW_HEIGHT: 40,
+  TASK_ROW_GAP: 8,
+  TASK_BAR_WIDTH: 360,
+  TASK_BAR_HEIGHT: 20,
 
-  AGENT_WIDTH: 92,
-  AGENT_HEIGHT: 58,
-  /** Distanta dintre marginea randului de task si sprite-ul agentului alocat. */
-  AGENT_TASK_OFFSET: 8,
+  // Cardul unui agent (folosit atat in lista AGENTS cat si "parcat" langa randul de task).
+  AGENT_WIDTH: 176,
+  AGENT_HEIGHT: 68,
+  AGENT_BAR_HEIGHT: 18,
+  AGENT_BADGE_SIZE: 22,
+  AGENT_DOT_RADIUS: 5,
+  /** Distanta dintre marginea randului de task si cardul agentului alocat. */
+  AGENT_TASK_OFFSET: 10,
 
   /** Durata clipirii de refuz (flashRefusal), in AgentSprite si ContractCard. */
   FLASH_DURATION_MS: 220,
@@ -62,24 +92,39 @@ export const LAYOUT = {
 
 export const COLORS = {
   BACKGROUND: 0x14161c,
-  OFFICE_BG: 0x1b1e27,
-  CONTRACT_BG: 0x1f222c,
 
-  AGENT_IDLE: 0x3a3f4b,
-  AGENT_ALLOCATED: 0x9c7a26,
-  AGENT_WORKING: 0x2f7d4f,
-  AGENT_BLOCKED: 0x7d2f2f,
-  AGENT_STROKE: 0xffffff,
+  PANEL_BG: 0x1a2030,
+  PANEL_BG_ALPHA: 0.92,
+  PANEL_BORDER: 0xffffff,
+  PANEL_BORDER_ALPHA: 0.14,
+  PANEL_SHADOW: 0x000000,
+  PANEL_SHADOW_ALPHA: 0.45,
 
-  TASK_LOCKED: 0x23262f,
-  TASK_AVAILABLE: 0x2a2d38,
-  TASK_IN_PROGRESS: 0x2a4d63,
-  TASK_DONE: 0x2f7d4f,
-  TASK_BAR_FILL: 0x4c8dff,
-  TASK_REFUSED_FLASH: 0xd94c4c,
+  SELECTION: 0xf5c518,
+  SELECTION_TEXT: 0x1a2030,
 
-  TEXT_PRIMARY: '#e6e8ee',
-  TEXT_MUTED: '#b7bccb',
+  BAR_TRACK: 0x000000,
+  BAR_TRACK_ALPHA: 0.35,
+  BAR_FILL_OK: 0x4ad46a,
+  BAR_FILL_WARN: 0xf5a623,
+  BAR_FILL_DANGER: 0xe8514f,
+
+  TEXT: 0xffffff,
+  TEXT_DIM: 0xb9c0d0,
+
+  // Cele patru stari reale ale agentului (T-38) - fundalul cardului.
+  AGENT_IDLE: 0x353c52,
+  AGENT_ASSIGNED: 0x8a6a1f,
+  AGENT_WORKING: 0x2c6b48,
+  AGENT_BLOCKED: 0x763232,
+
+  // Fundalul unui rand de sub-task, dupa statusul lui.
+  ROW_LOCKED: 0x1c2029,
+  ROW_AVAILABLE: 0x232a3c,
+  ROW_IN_PROGRESS: 0x24344f,
+  ROW_DONE: 0x1f3a2c,
+
+  REFUSAL: 0xe8514f,
 } as const;
 
 /** Etichete afisate pentru fiecare SkillId - cheia interna ramane neschimbata. */
@@ -89,6 +134,27 @@ export const SKILL_LABELS: Record<SkillId, string> = {
   databases: 'Databases',
   ai_integration: 'AI Integration',
 } as const;
+
+/** Cod scurt pentru insigna de skill dominant de pe cardul agentului. */
+export const SKILL_BADGES: Record<SkillId, string> = {
+  frontend: 'FE',
+  backend: 'BE',
+  databases: 'DB',
+  ai_integration: 'AI',
+} as const;
+
+/** Sub acest prag, pierderea prin coordonare e doar un avertisment; peste, e grava. */
+export const COORDINATION_DANGER_THRESHOLD = 25;
+
+/** Converteste o culoare hex Phaser (0xRRGGBB) intr-un string CSS, pentru stilul textelor. */
+export function cssColor(color: number): string {
+  return `#${color.toString(16).padStart(6, '0')}`;
+}
+
+/** Culoarea insignei de pierdere prin coordonare, dupa gravitate. */
+export function coordinationSeverityColor(percent: number): number {
+  return percent >= COORDINATION_DANGER_THRESHOLD ? COLORS.BAR_FILL_DANGER : COLORS.BAR_FILL_WARN;
+}
 
 /** Pozitia (centru) unui slot de birou, in coordonate de scena. */
 export function officeSlotPosition(index: number): { x: number; y: number } {
@@ -123,10 +189,10 @@ export function contractCardHeight(taskCount: number): number {
 }
 
 const TASK_STATUS_COLOR: Record<TaskStatus, number> = {
-  locked: COLORS.TASK_LOCKED,
-  available: COLORS.TASK_AVAILABLE,
-  in_progress: COLORS.TASK_IN_PROGRESS,
-  done: COLORS.TASK_DONE,
+  locked: COLORS.ROW_LOCKED,
+  available: COLORS.ROW_AVAILABLE,
+  in_progress: COLORS.ROW_IN_PROGRESS,
+  done: COLORS.ROW_DONE,
 };
 
 export function taskStatusColor(status: TaskStatus): number {

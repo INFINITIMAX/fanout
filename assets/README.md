@@ -6,7 +6,7 @@
 
 | Asset / pack | Autor | Sursă (URL) | Licență | Uz comercial | Atribuire cerută | Data |
 |---|---|---|---|---|---|---|
-| *(niciunul încă — se lucrează cu dreptunghiuri colorate)* | | | | | | |
+| M PLUS Rounded 1c (400, 700, 800 · latin + latin-ext) | Coji Morishita / M+ Fonts Project | https://fonts.google.com/specimen/M+PLUS+Rounded+1c | SIL Open Font License 1.1 | Da | Nu (recomandată) | 09-09-2026 |
 
 ### Cum se adaugă un asset
 

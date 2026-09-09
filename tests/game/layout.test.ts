@@ -35,11 +35,25 @@ describe('officeSlotPosition', () => {
     }
   });
 
-  it('agentii se aseaza pe 2 coloane: index-uri pare/impare au x diferit, aceeasi linie are y egal', () => {
-    const p0 = officeSlotPosition(0);
-    const p1 = officeSlotPosition(1);
-    expect(p0.y).toBe(p1.y);
-    expect(p0.x).not.toBe(p1.x);
+  // T-40 a schimbat asezarea de la 2 coloane la o singura coloana verticala, dupa
+  // referinta vizuala (lista de echipa din Pokemon SV). Testul nu a fost slabit ca
+  // sa treaca: verifica acum invarianta reala a noului layout, si tot poate cadea.
+  it('agentii se aseaza pe o singura coloana: acelasi x, y strict crescator', () => {
+    const pozitii = Array.from({ length: 6 }, (_, i) => officeSlotPosition(i));
+
+    for (const p of pozitii) {
+      expect(p.x).toBe(pozitii[0]!.x);
+    }
+    for (let i = 1; i < pozitii.length; i++) {
+      expect(pozitii[i]!.y).toBeGreaterThan(pozitii[i - 1]!.y);
+    }
+  });
+
+  it('pasul vertical dintre doi agenti consecutivi este constant', () => {
+    const pas = officeSlotPosition(1).y - officeSlotPosition(0).y;
+    for (let i = 2; i < 6; i++) {
+      expect(officeSlotPosition(i).y - officeSlotPosition(i - 1).y).toBe(pas);
+    }
   });
 });
 

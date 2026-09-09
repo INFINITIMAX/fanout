@@ -17,7 +17,8 @@ import {
   tick,
 } from '../../sim';
 import { BALANCE } from '../../data/balance';
-import { COLORS, FONT, LAYOUT, contractCardHeight, officeSlotPosition } from '../layout';
+import { COLORS, FONT, LAYOUT, RADIUS, contractCardHeight, cssColor, officeSlotPosition } from '../layout';
+import { paintPanel, textStyle } from '../render';
 import { createHud, type Hud, type Speed } from '../../ui/hud';
 import { AgentSprite, type AgentVisualStatus } from '../entities/AgentSprite';
 import { ContractCard } from '../entities/ContractCard';
@@ -47,27 +48,23 @@ export class FactoryScene extends Phaser.Scene {
     this.speed = 1;
     this.accumulatorMs = 0;
 
+    const officePanel = this.add.graphics();
+    officePanel.setPosition(LAYOUT.OFFICE_X, LAYOUT.OFFICE_Y);
+    paintPanel(officePanel, LAYOUT.OFFICE_WIDTH, LAYOUT.OFFICE_HEIGHT, { radius: RADIUS.PANEL });
     this.add
-      .rectangle(LAYOUT.OFFICE_X, LAYOUT.OFFICE_Y, LAYOUT.OFFICE_WIDTH, LAYOUT.OFFICE_HEIGHT, COLORS.OFFICE_BG)
-      .setOrigin(0, 0)
-      .setStrokeStyle(1, COLORS.AGENT_STROKE, 0.15);
-    this.add
-      .text(LAYOUT.OFFICE_X + 12, LAYOUT.OFFICE_Y + 8, `AGENTS (${this.state.agents.length})`, {
-        fontFamily: FONT.FAMILY,
-        fontSize: `${FONT.SIZE_TITLE}px`,
-        fontStyle: 'bold',
-        color: COLORS.TEXT_PRIMARY,
-      })
+      .text(
+        LAYOUT.OFFICE_X + 12,
+        LAYOUT.OFFICE_Y + 10,
+        `AGENTS (${this.state.agents.length})`,
+        textStyle(FONT.TITLE, COLORS.TEXT),
+      )
       .setOrigin(0, 0);
 
     this.pauseBanner = this.add
-      .text(LAYOUT.SCENE_WIDTH / 2, 8, 'PAUSED', {
-        fontFamily: FONT.FAMILY,
-        fontSize: `${FONT.SIZE_TITLE}px`,
-        fontStyle: 'bold',
-        color: '#14161c',
-        backgroundColor: '#ffb347',
-        padding: { x: 12, y: 6 },
+      .text(LAYOUT.SCENE_WIDTH / 2, 12, 'PAUSED', {
+        ...textStyle(FONT.TITLE, COLORS.SELECTION_TEXT),
+        backgroundColor: cssColor(COLORS.SELECTION),
+        padding: { x: 14, y: 6 },
       })
       .setOrigin(0.5, 0)
       .setDepth(1000)
@@ -240,14 +237,14 @@ export class FactoryScene extends Phaser.Scene {
             dropRect.rect.x + dropRect.rect.width + LAYOUT.AGENT_WIDTH / 2 + LAYOUT.AGENT_TASK_OFFSET,
             dropRect.rect.y + dropRect.rect.height / 2,
           );
-          sprite.setStatus(status, task.requiredSkill);
+          sprite.update(agent, status);
           return;
         }
       }
 
       const { x, y } = officeSlotPosition(index);
       sprite.setPosition(x, y);
-      sprite.setStatus('idle');
+      sprite.update(agent, 'idle');
     });
   }
 
